@@ -1,8 +1,10 @@
 # eprom
 
-**UNTESTED AGAINST HARDWARE.** This repo is the read-only workflow for dumping Antminer hashboard EEPROMs from Andrey's Windows PC (`Desktop-2026`) over SSH. The miners are Amlogic S21 Pro and S21 XP boards already running VNish with SSH enabled. Nothing here has been pointed at a miner.
+**UNTESTED AGAINST HARDWARE.** This repo is the read-only workflow for dumping Antminer hashboard EEPROMs from Andrey's Windows PC (`Desktop-2026`). Nothing here has been pointed at a miner. The tool never logs in by itself and never guesses a password. The operator supplies a password through their own environment.
 
-Write is not implemented. [SAFETY.md](SAFETY.md) is the rule set. A later same-board restore stays blocked until Andrey has reviewed a successful read-only dump of that same board.
+Antminer L9 (shop `10.2.21.8` and `10.2.21.26`) is a different board family from Amlogic S21 Pro / S21 XP (shop `10.2.11.42` and `10.2.11.40`). The `/dev/i2c-0` addresses `0x50`–`0x52` are an unverified S21/Amlogic hypothesis only. They have to be verified per family, and they are not a fact for L9. `--model L9` or `--model "Antminer L9"` is refused before any login.
+
+Write is not implemented. [SAFETY.md](SAFETY.md) is the rule set. EEPROM write stays blocked until Andrey has reviewed a successful read-only dump of that same board.
 
 ## What you pass in
 
@@ -12,9 +14,9 @@ The script has no built-in address, login, or password.
 | --- | --- |
 | Miner IP or hostname | `--host` or `EPROM_SSH_HOST` |
 | SSH user | `--user` or `EPROM_SSH_USER` |
-| SSH password | The prompt, or `EPROM_SSH_PASSWORD`. `--password` works and shows up in the process list. |
+| SSH password | The operator's own environment (`EPROM_SSH_PASSWORD`). The tool does not guess one. A prompt is the fallback if that variable is unset. `--password` works and shows up in the process list. |
 | SSH host key | `--host-key SHA256:...` or `--accept-new-host` the first time you have checked the fingerprint |
-| Model label | `--model`, for example `S21-Pro` or `S21-XP` |
+| Model label | `--model`, for example `S21-Pro` or `S21-XP`. `L9` and `Antminer L9` are refused. |
 | Miner serial | Optional `--serial`. If you omit it, the folder name uses the IP. |
 
 ## Layout
@@ -44,7 +46,7 @@ py -3 tools/dump_eeprom.py preflight --host 192.168.1.20 --user root --accept-ne
 py -3 tools/dump_eeprom.py dump --host 192.168.1.20 --user root --model S21-Pro --host-key SHA256:...
 ```
 
-`plan` prints the commands and does not connect. `preflight` checks SSH, `id`, `uname -a`, `/dev/i2c*`, which read tools exist, and (unless `--skip-probe`) one read at `0x50`, `0x51`, and `0x52`. `dump` reads each answering EEPROM twice, compares the copies, and writes the folder, `metadata.json`, and SHA-256 sums.
+`plan` prints the commands and does not connect. For an S21 Pro or S21 XP label, `preflight` checks SSH, `id`, `uname -a`, `/dev/i2c*`, which read tools exist, and (unless `--skip-probe`) one read at `0x50`, `0x51`, and `0x52`. That address list is the unverified S21/Amlogic hypothesis, not an L9 map. `dump` reads each answering EEPROM twice, compares the copies, and writes the folder, `metadata.json`, and SHA-256 sums. An L9 model is refused in `plan`, `preflight`, and `dump` with no network and no login.
 
 Python and paramiko are the runner because the password can stay in the prompt, each remote command is one allowlisted read, and a sysfs EEPROM read returns raw bytes. The script does not open an interactive shell and does not use SSH keys or an agent.
 

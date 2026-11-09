@@ -26,7 +26,7 @@ dumps/S21-Pro/192.168.1.20/2026-11-09/
   hb2-0x52.sha256
 ```
 
-Hashboard index 0 is I2C `0x50`, index 1 is `0x51`, index 2 is `0x52`.
+On the unverified S21/Amlogic hypothesis, hashboard index 0 is I2C `0x50`, index 1 is `0x51`, and index 2 is `0x52`. That map is not a fact for Antminer L9. The tool refuses an L9 model and does not write an L9 capture with these names.
 
 If the two reads differ, the script writes `hbN-0xAA.read1.bin` and `hbN-0xAA.read2.bin` and does not pick a winner.
 

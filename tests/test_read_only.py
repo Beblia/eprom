@@ -367,6 +367,41 @@ class CliTests(unittest.TestCase):
         code = dump_eeprom.main(["dump", "--host", "192.168.1.20", "--user", "root"])
         self.assertEqual(code, 1)
 
+    def test_l9_model_is_refused_without_login(self):
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+        from unittest.mock import patch
+
+        import dump_eeprom
+
+        self.assertTrue(dump_eeprom.is_l9_model("L9"))
+        self.assertTrue(dump_eeprom.is_l9_model("l9"))
+        self.assertTrue(dump_eeprom.is_l9_model("Antminer L9"))
+        self.assertTrue(dump_eeprom.is_l9_model("antminer-l9"))
+        self.assertFalse(dump_eeprom.is_l9_model("S21-Pro"))
+        self.assertFalse(dump_eeprom.is_l9_model("S21-XP"))
+        self.assertFalse(dump_eeprom.is_l9_model(""))
+
+        def refuse_network(*_args, **_kwargs):
+            raise AssertionError("L9 refusal must not log in or open a socket")
+
+        for mode in ("plan", "preflight", "dump"):
+            for model in ("L9", "Antminer L9", "l9"):
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with patch.object(dump_eeprom, "_connect", side_effect=refuse_network), patch.object(
+                    dump_eeprom, "_password", side_effect=refuse_network
+                ), redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = dump_eeprom.main(
+                        [mode, "--host", "192.0.2.1", "--user", "root", "--model", model]
+                    )
+                text = stderr.getvalue()
+                self.assertEqual(code, 1, msg=f"{mode} {model}")
+                self.assertIn("does not apply", text)
+                self.assertIn("unverified", text)
+                self.assertIn("No login was attempted", text)
+                self.assertNotIn("i2ctransfer", stdout.getvalue())
+
 
 class ParserTests(unittest.TestCase):
     def test_i2cdump_round_trip(self):

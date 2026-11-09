@@ -9,9 +9,11 @@ sysfs reads come back as bytes. Install once with:
 
     py -3 -m pip install -r requirements.txt
 
-Password comes from the prompt or EPROM_SSH_PASSWORD. --password works and
-is visible to other users on the PC, so the prompt is the better input.
-The script does not read SSH keys or an agent.
+The tool never logs in by itself and never guesses a password. The operator
+supplies one through their own environment (EPROM_SSH_PASSWORD). A prompt is
+only the fallback when that variable is unset. --password works and is
+visible to other users on the PC. The script does not read SSH keys or an agent.
+An L9 model is refused before any socket is opened.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import base64
 import getpass
 import hashlib
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +31,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import eprom_read as er
+
+# L9 is its own board family. "L9" and "Antminer L9" match; "S21-Pro" does not.
+_L9_MODEL = re.compile(r"(?:^|[^a-z0-9])l9(?:[^a-z0-9]|$)", re.IGNORECASE)
+L9_REFUSAL = (
+    "Antminer L9 is a different board family from Amlogic S21 Pro / S21 XP. "
+    "The S21 address map does not apply. This family is unverified. "
+    "No login was attempted."
+)
+
+
+def is_l9_model(model: str) -> bool:
+    return _L9_MODEL.search(model or "") is not None
 
 
 def _load_paramiko():
@@ -111,8 +126,12 @@ def _parser() -> argparse.ArgumentParser:
             action="store_true",
             help="Use i2ctransfer -f and skip the sysfs eeprom node",
         )
+        command.add_argument(
+            "--model",
+            default="",
+            help="Board family label. L9 is refused; 0x50-0x52 is an S21 hypothesis only.",
+        )
         if dumping:
-            command.add_argument("--model", default="")
             command.add_argument("--serial", default=None)
             command.add_argument("--allow-absent", action="store_true")
             command.add_argument("--reader", default=None, help="Local static eeprom-read binary")
@@ -272,6 +291,9 @@ def _print_result(result: er.RunResult) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     print(er.UNTESTED_NOTICE, file=sys.stderr)
+    if is_l9_model(getattr(args, "model", "") or ""):
+        print(L9_REFUSAL, file=sys.stderr)
+        return 1
     try:
         target = _target_from_args(args)
         er.validate_target(target)

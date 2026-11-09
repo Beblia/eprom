@@ -1,12 +1,18 @@
 # Read-only workflow
 
-**UNTESTED AGAINST HARDWARE.** This is the procedure `tools/dump_eeprom.py` implements. It has not been run on a VNish miner. Do a `plan` pass and read the commands before the first SSH session.
+**UNTESTED AGAINST HARDWARE.** This is the procedure `tools/dump_eeprom.py` implements. It has not been run on a VNish miner. Do a `plan` pass and read the commands before the first SSH session. The tool never logs in by itself and never guesses a password. The operator supplies a password through their own environment.
 
 Write stays out of this procedure. See [write-path-later.md](write-path-later.md) and [SAFETY.md](../SAFETY.md).
 
+## Two board families
+
+Antminer L9 (shop `10.2.21.8` and `10.2.21.26`) is a different board family from Amlogic S21 Pro / S21 XP (shop `10.2.11.42` and `10.2.11.40`). The `/dev/i2c-0` addresses `0x50`–`0x52` are an unverified S21/Amlogic hypothesis only. They must be verified per family. They are not documented here as fact for L9. The control board on an L9 may differ, and its EEPROM bus, chip, and addresses are unknown.
+
+`plan`, `preflight`, and `dump` refuse `--model L9`, `--model "Antminer L9"`, and the same words in any letter case. The refusal is local. It does not open a socket and it does not ask for a password.
+
 ## What a dump is
 
-Each hashboard EEPROM hangs off the Amlogic control board's `/dev/i2c-0`. skot/amlogic-cb-tools maps the three S19j Pro boards (the same bus the project is using for S21 Pro / S21 XP, still unverified on those machines) as:
+For the S21/Amlogic hypothesis only, each hashboard EEPROM is expected on the control board's `/dev/i2c-0`. skot/amlogic-cb-tools maps three S19j Pro boards, and this project is trying that same bus on S21 Pro / S21 XP. That map is still unverified on those machines, and it is not an L9 map:
 
 | Hashboard | I2C address |
 | --- | --- |
@@ -26,7 +32,7 @@ dumps/<model>/<serial-or-ip>/<YYYY-MM-DD>/
   ...
 ```
 
-`<serial-or-ip>` is the chassis serial you type, or the miner IP. The hashboard serial lives inside the EEPROM and may be encrypted. The folder does not claim to have decoded it.
+`<serial-or-ip>` is the chassis serial you type, or the miner IP. The hashboard serial lives inside the EEPROM. D-Central says that payload is AES-128, and Alex20129's S21+ path is AES-256-CBC. Neither is proven on our hardware. The folder stores raw bytes and does not claim to have decoded them.
 
 If `YYYY-MM-DD` already exists, the script uses `YYYY-MM-DDTHHMMSSZ` and leaves the older folder alone.
 
@@ -43,7 +49,7 @@ The default read is therefore 256 bytes, one address byte, in 32-byte chunks. Th
 
 A second address byte is dangerous on an 8-bit part: the chip stores that byte. The script sends a 16-bit pointer only when you pass both `--addr-bytes 2` and `--confirm-16bit-read`. Leave those off until a sysfs EEPROM node reports a longer file, or until the package marking is read on the bench. Prefer the sysfs file when it exists; the kernel driver already knows the address width, and the script only reads the file (`dd if=...`, never `of=`).
 
-D-Central's parser note says the S21 family uses AES-128 (`x21_aes`, preamble byte `0x05`). This workflow stores raw bytes and does not decrypt them. A same-board backup does not need the key. Editing or moving an image to another board is not solved.
+D-Central says the S21 family uses AES-128 (`x21_aes`, preamble byte `0x05`). Alex20129's S21+ path is AES-256-CBC. Neither is proven on our hardware. This workflow stores raw bytes and does not decrypt them. A same-board backup does not need the key. Editing or moving an image to another board is unproven.
 
 ## Step 0. Review the commands on the PC
 
@@ -59,7 +65,7 @@ py -3 tools/dump_eeprom.py plan --host <miner-ip> --user <ssh-user> --model S21-
 py -3 tools/dump_eeprom.py preflight --host <miner-ip> --user <ssh-user> --accept-new-host
 ```
 
-The password is prompted, or taken from `EPROM_SSH_PASSWORD`. The script connects with that password only (no key file, no agent). The first session needs `--accept-new-host` or `--host-key SHA256:...` after you have checked the fingerprint out of band. The fingerprint is printed and stored in the preflight JSON.
+The tool does not log in by itself and does not guess a password. The operator supplies one through their own environment (`EPROM_SSH_PASSWORD`). If that variable is unset, the S21 path can prompt. It uses that supplied password only (no key file, no agent, no built-in password). The first session needs `--accept-new-host` or `--host-key SHA256:...` after you have checked the fingerprint out of band. The fingerprint is printed and stored in the preflight JSON. An L9 model never reaches this step.
 
 Add `--skip-probe` if the first session should stop before any EEPROM byte is read.
 
@@ -86,9 +92,9 @@ A fixed loop runs `command -v` for `i2cdetect`, `i2cdump`, `i2cget`, `i2ctransfe
 
 Firmware text is read, if the file is readable, from `/etc/os-release`, `/etc/issue`, `/etc/vnish_version`, `/etc/vnish-version`, `/etc/miner_version`, and `/opt/vnish/version`. Those paths are candidates. A missing file is recorded as missing. The first non-empty line becomes `firmware_version` in the JSON.
 
-## Step 4. Probe 0x50, 0x51, 0x52
+## Step 4. Probe 0x50, 0x51, 0x52 (S21/Amlogic hypothesis only)
 
-For each address the script:
+This step is for an S21 Pro or S21 XP label. It is not a procedure for L9. For each address the script:
 
 1. Runs `test -r /sys/bus/i2c/devices/0-00NN/eeprom`.
 2. If `i2ctransfer` exists, runs `i2ctransfer -y 0 r1@0xNN` (one current-address read, no pointer write).
