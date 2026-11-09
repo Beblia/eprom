@@ -1,0 +1,21 @@
+# Board dumps carry identity and calibration. They stay untracked unless
+# someone force-adds a file on purpose.
+dumps/*
+!dumps/README.md
+!dumps/.gitkeep
+
+# Static reader binaries are built locally for the miner.
+tools/bin/
+
+# Secrets and local environments.
+.env
+*.pem
+id_rsa
+id_ed25519
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
